@@ -3,6 +3,9 @@
 import sys
 import struct
 
+XkbNumVirtualMods = 16
+
+
 def usage(exitcode = 0):
     import os
     print os.path.basename(__file__) + " file.xkm"
@@ -14,6 +17,23 @@ class InvalidXKMFile:
 
     def __str__(self):
         return self.reason
+
+# Return number of bytes needed to padd 'bytes' to 4-byte units
+def pad4(bytes):
+    return (((bytes + 3) >> 2) << 2) - bytes
+
+# XKM uses counted strings, a 16-bit number describes the length of the
+# string, string follows after. The whole lot is 4-byte padded.
+def xkm_read_string(buffer):
+    string = None
+
+    l = struct.unpack("H", buffer.read(2))[0]
+    if l > 0:
+        string = struct.unpack("%ds" % l, buffer.read(l))[0]
+        pad = pad4(l + 2)
+        if pad > 0:
+            buffer.read(pad)
+    return string
 
 # How this works:
 #   - Subclasses of XkmSection need to initialize self.field[] in the order of
@@ -61,12 +81,52 @@ class XkmSectionInfo(XkmSection):
                        "XkmVirtualModsIndex"]
 
 
+class XkmVirtualMods(XkmSection):
+    def __init__(self):
+        XkmSection.__init__(self)
+        self.vmods = XkbNumVirtualMods * [0]
+        self.names = XkbNumVirtualMods * [""]
+        self.fields = ["vmods", "names"]
+
+    def unpack(self, buffer):
+        # for some reason, the XkmSectionInfo seems to be here again.
+        section = XkmSectionInfo()
+        section.unpack(buffer)
+
+        bound, named = struct.unpack("HH", buffer.read(4))
+        pad_needed = 0
+        self.bound, self.named = bound, named
+
+        for i in range(0,  XkbNumVirtualMods):
+            if (bound & (1 << i)):
+                vmod = struct.unpack("B", buffer.read(1))
+                self.vmods[i] = vmod[0]
+                pad_needed += 1
+
+        if pad4(pad_needed) > 0:
+            buffer.read(pad4(pad_needed))
+
+        for i in range(0, XkbNumVirtualMods):
+            if (named & (1 << i)):
+                self.names[i] = xkm_read_string(buffer)
+
 def xkm_read_sectioninfo(file):
     sect = XkmSectionInfo()
     sect.unpack(file)
     print "%s" % sect
 
     return sect
+
+def xkm_read_section(file, section):
+    pos = file.tell()
+    file.seek(section.offset)
+
+    if section.type == 6:
+        sect = XkmVirtualMods()
+        sect.unpack(file)
+        print "%s" % sect
+
+    file.seek(pos)
 
 def xkm_read_TOC(file):
     version, m, k, x = struct.unpack('Bccc', file.read(4))
@@ -82,9 +142,14 @@ def xkm_read_TOC(file):
     print "    Number of sections: %d" % ntoc
     print "    Present: %d" % present
 
+    sections = []
     for i in range(0, ntoc):
         print "Section %d" % i
-        xkm_read_sectioninfo(file)
+        sections.append(xkm_read_sectioninfo(file))
+
+    for section in sections:
+        xkm_read_section(file, section)
+
 
 
 def xkm_read(file):
