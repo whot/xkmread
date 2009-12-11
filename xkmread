@@ -88,10 +88,6 @@ class XkmVirtualMods(XkmSection):
         self.fields = ["vmods", "names"]
 
     def unpack(self, buffer):
-        # for some reason, the XkmSectionInfo seems to be here again.
-        section = XkmSectionInfo()
-        section.unpack(buffer)
-
         bound, named = struct.unpack("HH", buffer.read(4))
         pad_needed = 0
         self.bound, self.named = bound, named
@@ -119,6 +115,9 @@ def xkm_read_sectioninfo(file):
 def xkm_read_section(file, section):
     pos = file.tell()
     file.seek(section.offset)
+
+    # for some reason, the XkmSectionInfo seems to be here again.
+    XkmSectionInfo().unpack(file)
 
     if section.type == XkmSectionTypes.index("XkmVirtualModsIndex"):
         sect = XkmVirtualMods()
