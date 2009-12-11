@@ -59,12 +59,12 @@ class XkmSection:
             self.__dict__[key] = val
 
     def __str__(self):
-        str = ""
+        str = "Section: %s\n" % self.__class__.__name__
         for key in self.fields:
             val = self.__dict__[key]
             if self.special_output.has_key(key):
                 val = self.special_output[key][val]
-            str += "%s: %s\n" % (key, val)
+            str += "    %s: %s\n" % (key, val)
         return str
 
 class XkmSectionInfo(XkmSection):
