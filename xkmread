@@ -1,0 +1,72 @@
+#!/usr/bin/env python
+
+import sys
+import struct
+
+def usage(exitcode = 0):
+    import os
+    print os.path.basename(__file__) + " file.xkm"
+    sys.exit(exitcode)
+
+class InvalidXKMFile:
+    def __init__(self, reason):
+        self.reason = reason
+
+    def __str__(self):
+        return self.reason
+
+def xkm_read_sectioninfo(file):
+    type, format, size, offset = struct.unpack('HHHH', file.read(8))
+
+    xkm_index_types = ["XkmTypesIndex",
+                       "XkmCompatMapIndex",
+                       "XkmSymbolsIndex",
+                       "XkmIndicatorsIndex",
+                       "XkmKeyNamesIndex",
+                       "XkmGeometryIndex",
+                       "XkmVirtualModsIndex"]
+
+    print "   Type: %s (%d)" % (xkm_index_types[type], type)
+    print "   Format: %d" % format
+    print "   Size: %d" % size
+    print "   Offset: %d" % offset
+
+def xkm_read_TOC(file):
+    version, m, k, x = struct.unpack('Bccc', file.read(4))
+    if x + k + m != "xkm":
+        raise InvalidXKMFile("Not an XKM file.")
+
+    print "XKM file version %d." % version
+
+    type, min_keycode, max_keycode, ntoc, present, pad = struct.unpack('BBBBHH', file.read(8))
+    print "File info:"
+    print "    Type: %d" % type
+    print "    Keycode range: %d-%d" % (min_keycode, max_keycode)
+    print "    Number of sections: %d" % ntoc
+    print "    Present: %d" % present
+
+    for i in range(0, ntoc):
+        print "Section %d" % i
+        xkm_read_sectioninfo(file)
+
+
+def xkm_read(file):
+    xkm_read_TOC(file)
+
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        usage(1)
+
+    filename = sys.argv[1]
+    file = open(filename, "rb")
+    if not file:
+        print "Cannot access %s" % filename
+        sys.exit(1)
+
+    try:
+        xkm_read(file)
+    except InvalidXKMFile as e:
+        print "Failed to read file '%s'." % filename
+        print "Reason: %s" % e
+
