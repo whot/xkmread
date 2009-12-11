@@ -5,6 +5,13 @@ import struct
 
 XkbNumVirtualMods = 16
 
+XkmSectionTypes = ["XkmTypesIndex",
+                   "XkmCompatMapIndex",
+                   "XkmSymbolsIndex",
+                   "XkmIndicatorsIndex",
+                   "XkmKeyNamesIndex",
+                   "XkmGeometryIndex",
+                   "XkmVirtualModsIndex"]
 
 def usage(exitcode = 0):
     import os
@@ -71,15 +78,7 @@ class XkmSectionInfo(XkmSection):
                 ]
         self.format = "HHHH"
         self.struct_size = struct.calcsize(self.format)
-        self.special_output["type"] = [
-                       "XkmTypesIndex",
-                       "XkmCompatMapIndex",
-                       "XkmSymbolsIndex",
-                       "XkmIndicatorsIndex",
-                       "XkmKeyNamesIndex",
-                       "XkmGeometryIndex",
-                       "XkmVirtualModsIndex"]
-
+        self.special_output["type"] = XkmSectionTypes
 
 class XkmVirtualMods(XkmSection):
     def __init__(self):
@@ -121,7 +120,7 @@ def xkm_read_section(file, section):
     pos = file.tell()
     file.seek(section.offset)
 
-    if section.type == 6:
+    if section.type == XkmSectionTypes.index("XkmVirtualModsIndex"):
         sect = XkmVirtualMods()
         sect.unpack(file)
         print "%s" % sect
