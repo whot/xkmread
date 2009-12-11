@@ -15,10 +15,44 @@ class InvalidXKMFile:
     def __str__(self):
         return self.reason
 
-def xkm_read_sectioninfo(file):
-    type, format, size, offset = struct.unpack('HHHH', file.read(8))
+# How this works:
+#   - Subclasses of XkmSection need to initialize self.field[] in the order of
+#   the subfields of the section. Best during __init__
+#   - Subclasses of XkmSection need to init self.format and self.struct_size
+#   Once that's set up, the class can just call .unpack() on the file/buffer
+#   and it will set itself up with member variables according to the field
+#   names.
+class XkmSection:
+    def __init__(self):
+        self.special_output = {}
 
-    xkm_index_types = ["XkmTypesIndex",
+    def unpack(self, buffer):
+        t = struct.unpack(self.format, buffer.read(self.struct_size))
+        for val, key in zip(t, self.fields):
+            self.__dict__[key] = val
+
+    def __str__(self):
+        str = ""
+        for key in self.fields:
+            val = self.__dict__[key]
+            if self.special_output.has_key(key):
+                val = self.special_output[key][val]
+            str += "%s: %s\n" % (key, val)
+        return str
+
+class XkmSectionInfo(XkmSection):
+    def __init__(self):
+        XkmSection.__init__(self)
+        self.fields = [
+                "type",
+                "format",
+                "size",
+                "offset"
+                ]
+        self.format = "HHHH"
+        self.struct_size = struct.calcsize(self.format)
+        self.special_output["type"] = [
+                       "XkmTypesIndex",
                        "XkmCompatMapIndex",
                        "XkmSymbolsIndex",
                        "XkmIndicatorsIndex",
@@ -26,10 +60,13 @@ def xkm_read_sectioninfo(file):
                        "XkmGeometryIndex",
                        "XkmVirtualModsIndex"]
 
-    print "   Type: %s (%d)" % (xkm_index_types[type], type)
-    print "   Format: %d" % format
-    print "   Size: %d" % size
-    print "   Offset: %d" % offset
+
+def xkm_read_sectioninfo(file):
+    sect = XkmSectionInfo()
+    sect.unpack(file)
+    print "%s" % sect
+
+    return sect
 
 def xkm_read_TOC(file):
     version, m, k, x = struct.unpack('Bccc', file.read(4))
