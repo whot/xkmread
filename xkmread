@@ -105,6 +105,82 @@ class XkmVirtualMods(XkmSection):
             if (named & (1 << i)):
                 self.names[i] = xkm_read_string(buffer)
 
+class XkmKeyTypeDesc(XkmSection):
+    def __init__(self):
+        XkmSection.__init__(self)
+        self.fields = [
+                "realMods",
+                "numLevels",
+                "virtualMods",
+                "nMapEntries",
+                "nLevelNames",
+                "preserve",
+                ]
+        self.format = "BBHBBBB"
+        self.struct_size = struct.calcsize(self.format)
+
+    def unpack(self, buffer):
+        XkmSection.unpack(self, buffer)
+        self.map_entries = []
+        for i in range(0, self.nMapEntries):
+            # xkmKTMapEntry
+            level, realmods, virtmods = struct.unpack("BBH", buffer.read(4))
+            self.map_entries.append({
+                "level" : level,
+                "realmods" : realmods,
+                "virtmods" : virtmods
+                })
+
+        self.kt_name = xkm_read_string(buffer)
+
+        if self.preserve:
+            # xkmModsDesc
+            self.preserve_type = []
+            for i in range(0, self.nMapEntries):
+                realMods, pad, virtMods = struct.unpack("BBH", buffer.read(4))
+                self.preserve_type.append({
+                    "realMods" : realMods,
+                    "virtMods" : virtMods})
+
+
+        if self.nLevelNames:
+            self.level_names = []
+            for i in range(0, self.nLevelNames):
+                self.level_names.append(xkm_read_string(buffer))
+
+
+    def __str__(self):
+        s = XkmSection.__str__(self)
+        for me in self.map_entries:
+            print me.__class__.__name__
+            for key in me.keys():
+                s += "%s: %s\n" % (key, me[key])
+        return s
+
+class XkmTypes(XkmSection):
+    def __init__(self):
+        XkmSection.__init__(self)
+        self.num_types = -1
+        self.fields = ["name", "num_types"]
+
+    def unpack(self, buffer):
+        self.name = xkm_read_string(buffer)
+        self.num_types= struct.unpack("H", buffer.read(2))[0]
+        self.type_descs = []
+        buffer.read(pad4(2))
+        for i in range(0, self.num_types):
+            desc = XkmKeyTypeDesc()
+            desc.unpack(buffer)
+            self.type_descs.append(desc)
+
+    def __str__(self):
+        s = XkmSection.__str__(self)
+        for desc in self.type_descs:
+            s += str(desc)
+        return s
+
+
+
 def xkm_read_sectioninfo(file):
     sect = XkmSectionInfo()
     sect.unpack(file)
@@ -119,10 +195,15 @@ def xkm_read_section(file, section):
     # for some reason, the XkmSectionInfo seems to be here again.
     XkmSectionInfo().unpack(file)
 
+    sect = None
     if section.type == XkmSectionTypes.index("XkmVirtualModsIndex"):
         sect = XkmVirtualMods()
         sect.unpack(file)
-        print "%s" % sect
+    elif section.type == XkmSectionTypes.index("XkmTypesIndex"):
+        sect = XkmTypes()
+        sect.unpack(file)
+
+    print "%s" % sect
 
     file.seek(pos)
 
