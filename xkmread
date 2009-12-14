@@ -78,7 +78,7 @@ def type_to_str(val):
 # How this works:
 #   - Subclasses of XkmSection need to initialize self.field[] in the order of
 #   the subfields of the section. Best during __init__
-#   - Subclasses of XkmSection need to init self.format and self.struct_size
+#   - Subclasses of XkmSection need to init self.format
 #   Once that's set up, the class can just call .unpack() on the file/buffer
 #   and it will set itself up with member variables according to the field
 #   names.
@@ -87,7 +87,8 @@ class XkmSection:
         self.special_output = {}
 
     def unpack(self, buffer):
-        t = struct.unpack(self.format, buffer.read(self.struct_size))
+        struct_size = struct.calcsize(self.format)
+        t = struct.unpack(self.format, buffer.read(struct_size))
         for val, key in zip(t, self.fields):
             self.__dict__[key] = val
 
@@ -113,7 +114,6 @@ class XkmSectionInfo(XkmSection):
                 "offset"
                 ]
         self.format = "HHHH"
-        self.struct_size = struct.calcsize(self.format)
         self.special_output["type"] = XkmSectionTypes
 
 class XkmVirtualMods(XkmSection):
@@ -156,7 +156,6 @@ class XkmKeyTypeDesc(XkmSection):
                 "level_names"
                 ]
         self.format = "BBHBBBB"
-        self.struct_size = struct.calcsize(self.format)
 
     def unpack(self, buffer):
         XkmSection.unpack(self, buffer)
@@ -220,7 +219,6 @@ class XkmTOC(XkmSection):
                        "ntoc",
                        "present"]
         self.format = "BBBBHH"
-        self.struct_size = struct.calcsize(self.format)
 
 
 class XkmSymInterpretDesc(XkmSection):
@@ -234,7 +232,6 @@ class XkmSymInterpretDesc(XkmSection):
 			"actionType",
 			"actionData"]
         self.format = "IBBBBB"
-        self.struct_size = struct.calcsize(self.format)
 
     def unpack(self, buffer):
         XkmSection.unpack(self, buffer)
