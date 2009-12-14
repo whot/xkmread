@@ -210,6 +210,16 @@ class XkmTypes(XkmSection):
         indent.pop()
         return s
 
+class XkmTOC(XkmSection):
+    def __init__(self):
+        XkmSection.__init__(self)
+        self.fields = ["type",
+                       "min_keycode",
+                       "max_keycode",
+                       "ntoc",
+                       "present"]
+        self.format = "BBBBHH"
+        self.struct_size = struct.calcsize(self.format)
 
 
 def xkm_read_sectioninfo(file):
@@ -238,6 +248,8 @@ def xkm_read_section(file, section):
 
     file.seek(pos)
 
+
+
 def xkm_read_TOC(file):
     version, m, k, x = struct.unpack('Bccc', file.read(4))
     if x + k + m != "xkm":
@@ -245,15 +257,17 @@ def xkm_read_TOC(file):
 
     print "XKM file version %d." % version
 
-    type, min_keycode, max_keycode, ntoc, present, pad = struct.unpack('BBBBHH', file.read(8))
-    print "File info:"
-    print "    Type: %d" % type
-    print "    Keycode range: %d-%d" % (min_keycode, max_keycode)
-    print "    Number of sections: %d" % ntoc
-    print "    Present: %d" % present
+    toc = XkmTOC()
+    toc.unpack(file)
+    print "%s" % toc
+
+    return toc
+
+def xkm_read(file):
+    toc = xkm_read_TOC(file)
 
     sections = []
-    for i in range(0, ntoc):
+    for i in range(0, toc.ntoc):
         indent.push()
         sections.append(xkm_read_sectioninfo(file))
         indent.pop()
@@ -261,10 +275,6 @@ def xkm_read_TOC(file):
     for section in sections:
         xkm_read_section(file, section)
 
-
-
-def xkm_read(file):
-    xkm_read_TOC(file)
 
 
 if __name__ == "__main__":
