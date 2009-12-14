@@ -265,6 +265,34 @@ class XkmCompatMap(XkmSection):
                     "realMods" : realMods,
                     "virtMods" : virtMods})
 
+class XkmKeyNames(XkmSection):
+    def __init__(self):
+        XkmSection.__init__(self)
+        self.fields = ["name",
+                        "minKC",
+                        "maxKC",
+                        "num_aliases",
+                        "keynames",
+                        "aliases"]
+
+    def unpack(self, buffer):
+        self.name = xkm_read_string(buffer)
+        self.minKC, self.maxKC, self.num_aliases, pad = struct.unpack("BBBB", buffer.read(4))
+
+        self.keynames = []
+        self.aliases = {}
+
+        for i in range(self.minKC, self.maxKC + 1):
+            self.keynames.append(buffer.read(4))
+
+        for i in range(0, self.num_aliases):
+            self.aliases[buffer.read(4)] = buffer.read(4)
+
+
+
+
+
+
 
 def xkm_read_sectioninfo(file):
     sect = XkmSectionInfo()
@@ -289,6 +317,9 @@ def xkm_read_section(file, section):
         sect.unpack(file)
     elif section.type == XkmSectionTypes.index("XkmCompatMapIndex"):
         sect = XkmCompatMap()
+        sect.unpack(file)
+    elif section.type == XkmSectionTypes.index("XkmKeyNamesIndex"):
+        sect = XkmKeyNames()
         sect.unpack(file)
 
     print "%s" % sect
