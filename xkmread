@@ -307,11 +307,35 @@ class XkmKeyNames(XkmSection):
         for i in range(0, self.num_aliases):
             self.aliases[buffer.read(4)] = buffer.read(4)
 
+class XkmIndicatorMapDesc(XkmSection):
+    def __init__(self):
+        XkmSection.__init__(self)
+        self.fields = [
+                "indicator",
+                "flags",
+                "which_mods",
+                "real_mods",
+                "vmods",
+                "which_groups",
+                "groups",
+                "ctrls"]
+        self.format = "BBBBHBBI"
 
+class XkmIndicators(XkmSection):
+    def __init__(self):
+        XkmSection.__init__(self)
+        self.fields = ["num_leds",
+                       "phys_indicators",
+                       "indicators"]
 
+    def unpack(self, buffer):
+        self.num_leds, pad1, pad2, self.phys_indicators = struct.unpack("BBHI", buffer.read(8))
 
-
-
+        self.indicators = []
+        for i in range(0, self.num_leds):
+            indicator = XkmIndicatorMapDesc()
+            indicator.unpack(buffer)
+            self.indicators.append(indicator)
 
 def xkm_read_sectioninfo(file):
     sect = XkmSectionInfo()
@@ -339,6 +363,9 @@ def xkm_read_section(file, section):
         sect.unpack(file)
     elif section.type == XkmSectionTypes.index("XkmKeyNamesIndex"):
         sect = XkmKeyNames()
+        sect.unpack(file)
+    elif section.type == XkmSectionTypes.index("XkmIndicatorsIndex"):
+        sect = XkmIndicators()
         sect.unpack(file)
 
     print "%s" % sect
