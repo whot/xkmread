@@ -25,6 +25,19 @@ class InvalidXKMFile:
     def __str__(self):
         return self.reason
 
+class Indent:
+    def __init__(self, shiftwidth=4):
+        self.indent = ""
+        self.shiftwidth = shiftwidth
+    def push(self):
+        self.indent += " " * self.shiftwidth
+    def pop(self):
+        self.indent = self.indent[:-self.shiftwidth]
+    def get(self):
+        return self.indent
+
+indent = Indent()
+
 # Return number of bytes needed to padd 'bytes' to 4-byte units
 def pad4(bytes):
     return (((bytes + 3) >> 2) << 2) - bytes
@@ -41,6 +54,25 @@ def xkm_read_string(buffer):
         if pad > 0:
             buffer.read(pad)
     return string
+
+def type_to_str(val):
+    s = ""
+    if val.__class__ == list:
+        indent.push()
+        for v in val:
+            s += type_to_str(v) + ", "
+        if len(val) > 0:
+            s = s[:-2] # strip last ', '
+        indent.pop()
+    elif val.__class__ == dict:
+        s += "\n"
+        indent.push()
+        for k in val.keys():
+            s += indent.get() + "%s: %s\n" % (k, type_to_str(val[k]))
+        indent.pop()
+    else:
+        s = str(val)
+    return s
 
 # How this works:
 #   - Subclasses of XkmSection need to initialize self.field[] in the order of
@@ -59,12 +91,15 @@ class XkmSection:
             self.__dict__[key] = val
 
     def __str__(self):
-        str = "Section: %s\n" % self.__class__.__name__
+        str = indent.get() + "Section: %s\n" % self.__class__.__name__
+        indent.push()
         for key in self.fields:
             val = self.__dict__[key]
             if self.special_output.has_key(key):
                 val = self.special_output[key][val]
-            str += "    %s: %s\n" % (key, val)
+
+            str += indent.get() + "%s: %s\n" % (key, type_to_str(val))
+        indent.pop()
         return str
 
 class XkmSectionInfo(XkmSection):
@@ -115,6 +150,9 @@ class XkmKeyTypeDesc(XkmSection):
                 "nMapEntries",
                 "nLevelNames",
                 "preserve",
+                "preserve_type",
+                "map_entries",
+                "level_names"
                 ]
         self.format = "BBHBBBB"
         self.struct_size = struct.calcsize(self.format)
@@ -148,15 +186,6 @@ class XkmKeyTypeDesc(XkmSection):
             for i in range(0, self.nLevelNames):
                 self.level_names.append(xkm_read_string(buffer))
 
-
-    def __str__(self):
-        s = XkmSection.__str__(self)
-        for me in self.map_entries:
-            print me.__class__.__name__
-            for key in me.keys():
-                s += "%s: %s\n" % (key, me[key])
-        return s
-
 class XkmTypes(XkmSection):
     def __init__(self):
         XkmSection.__init__(self)
@@ -175,8 +204,10 @@ class XkmTypes(XkmSection):
 
     def __str__(self):
         s = XkmSection.__str__(self)
+        indent.push()
         for desc in self.type_descs:
             s += str(desc)
+        indent.pop()
         return s
 
 
@@ -223,8 +254,9 @@ def xkm_read_TOC(file):
 
     sections = []
     for i in range(0, ntoc):
-        print "Section %d" % i
+        indent.push()
         sections.append(xkm_read_sectioninfo(file))
+        indent.pop()
 
     for section in sections:
         xkm_read_section(file, section)
