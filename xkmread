@@ -60,16 +60,35 @@ def type_to_str(val):
     s = ""
     if val.__class__ == list:
         indent.push()
-        for v in val:
-            s += type_to_str(v) + ", "
-        if len(val) > 0:
-            s = s[:-2] # strip last ', '
+        it = val.__iter__()
+        try:
+            need_linebreak = 5 if (len(val) > 5) else 0
+            v = it.next()
+            while True:
+                s += type_to_str(v)
+                v = it.next()
+                s += ", "
+                need_linebreak -= 1
+                if need_linebreak == 0:
+                    s += "\n" + indent.get()
+                    need_linebreak = 5
+        except StopIteration:
+            pass
+
         indent.pop()
+
     elif val.__class__ == dict:
         s += "\n"
         indent.push()
-        for k in val.keys():
-            s += indent.get() + "%s: %s\n" % (k, type_to_str(val[k]))
+        it = val.keys().__iter__()
+        try:
+            k = it.next()
+            while True:
+                s += indent.get() + "%s: %s" % (k, type_to_str(val[k]))
+                k = it.next()
+                s += "\n"
+        except StopIteration:
+            pass
         indent.pop()
     else:
         s = str(val)
