@@ -4,6 +4,7 @@ import sys
 import struct
 
 XkbNumVirtualMods = 16
+XkbNumKbdGroups = 4
 
 XkmSectionTypes = ["XkmTypesIndex",
                    "XkmCompatMapIndex",
@@ -222,6 +223,52 @@ class XkmTOC(XkmSection):
         self.struct_size = struct.calcsize(self.format)
 
 
+class XkmSymInterpretDesc(XkmSection):
+    def __init__(self):
+        XkmSection.__init__(self)
+        self.fields = ["sym",
+			"mods",
+			"match",
+			"virtualMod",
+			"flags",
+			"actionType",
+			"actionData"]
+        self.format = "IBBBBB"
+        self.struct_size = struct.calcsize(self.format)
+
+    def unpack(self, buffer):
+        XkmSection.unpack(self, buffer)
+        self.actionData = buffer.read(7)
+
+       
+class XkmCompatMap(XkmSection):
+    def __init__(self):
+        XkmSection.__init__(self)
+        self.fields = ["name",
+                       "num_si",
+                       "groups",
+                       "sym_interpret"]
+
+    def unpack(self, buffer):
+        self.name = xkm_read_string(buffer)
+        self.num_si, groups, pad = struct.unpack("HBB", buffer.read(4))
+
+        self.sym_interpret = []
+        self.groups = []
+
+        for i in range(0, self.num_si):
+            desc = XkmSymInterpretDesc()
+            desc.unpack(buffer)
+            self.sym_interpret.append(desc)
+
+        for i in range(0, XkbNumKbdGroups):
+            if groups & (1 << i):
+                realMods, pad, virtMods = struct.unpack("BBH", buffer.read(4))
+                self.groups.append({
+                    "realMods" : realMods,
+                    "virtMods" : virtMods})
+
+
 def xkm_read_sectioninfo(file):
     sect = XkmSectionInfo()
     sect.unpack(file)
@@ -242,6 +289,9 @@ def xkm_read_section(file, section):
         sect.unpack(file)
     elif section.type == XkmSectionTypes.index("XkmTypesIndex"):
         sect = XkmTypes()
+        sect.unpack(file)
+    elif section.type == XkmSectionTypes.index("XkmCompatMapIndex"):
+        sect = XkmCompatMap()
         sect.unpack(file)
 
     print "%s" % sect
