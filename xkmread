@@ -6,6 +6,9 @@ import re
 
 XkbNumVirtualMods = 16
 XkbNumKbdGroups = 4
+XkmKeyHasTypes = 0x0F
+XkmKeyHasActions = 1 << 4
+XkmKeyHasBehavior = 1 << 5
 
 XkmSectionTypes = ["XkmTypesIndex",
                    "XkmCompatMapIndex",
@@ -364,6 +367,106 @@ class XkmIndicators(XkmSection):
             indicator.unpack(buffer)
             self.indicators.append(indicator)
 
+class XkmActionDesc(XkmSection):
+    def __init__(self):
+        XkmSection.__init__(self)
+        self.fields = ["type", "data"]
+
+    def unpack(self, buffer):
+        self.type = struct.unpack("B", buffer.read(1))[0]
+        self.data = buffer.read(7)
+
+class XkmBehaviorDesc(XkmSection):
+    def __init__(self):
+        XkmSection.__init__(self)
+        self.fields = ["type", "data"]
+        self.format = "BB"
+
+    def unpack(self, buffer):
+        XkmSection.unpack(self, buffer)
+        buffer.read(2) # padding
+
+
+class XkmKeySymMapDesc(XkmSection):
+    def __init__(self):
+        XkmSection.__init__(self)
+        self.fields = ["width",
+                       "num_groups",
+                       "modifier_map",
+                       "flags",
+                       "type_names",
+                       "syms",
+                       "actions",
+                       "behavior"]
+        self.format = "BBBB"
+
+    def unpack(self, buffer):
+        XkmSection.unpack(self, buffer)
+        
+        self.type_names = XkbNumKbdGroups * [None]
+        self.syms = []
+        self.actions = []
+        self.behavior = None
+
+        if self.flags & XkmKeyHasTypes:
+            for i in range(0, XkbNumKbdGroups):
+                if self.flags & (1 << i):
+                    self.type_names[i] = xkm_read_string(buffer)
+
+        if self.num_groups:
+            for i in range(0, self.num_groups * self.width):
+                ks = struct.unpack("I", buffer.read(4))[0]
+                self.syms.append(keysyms[ks])
+
+            if self.flags & XkmKeyHasActions:
+                for i in range(0, self.num_groups * self.width):
+                    desc = XkmActionDesc()
+                    desc.unpack(buffer)
+                    self.actions.append(desc)
+
+            if self.flags & XkmKeyHasBehavior:
+                self.behavior = XkmBehaviorDesc()
+                self.behavior.unpack(buffer)
+
+
+class XkmSymbols(XkmSection):
+    def __init__(self):
+        XkmSection.__init__(self)
+        self.fields = [ "min_keycode",
+                        "max_keycode",
+                        "group_names",
+                        "total_vmod_maps",
+                        "name", # actually first in list
+                        "groups",
+                        "keysyms",
+                        "vmods"]
+        self.format = "BBBB"
+
+    def unpack(self, buffer):
+        self.name = xkm_read_string(buffer)
+
+        XkmSection.unpack(self, buffer)
+
+        self.vmods = []
+        self.keysyms = []
+        self.groups = XkbNumKbdGroups * [None]
+
+        for i in range(0, XkbNumKbdGroups):
+            if self.group_names & (1 << i):
+                self.groups[i] = xkm_read_string(buffer)
+
+        for i in range(self.min_keycode, self.max_keycode + 1):
+            desc = XkmKeySymMapDesc()
+            desc.unpack(buffer)
+            self.keysyms.append(desc)
+
+        for i in range(0, self.total_vmod_maps):
+            realMods, pad, virtMods = struct.unpack("BBH", buffer.read(4))
+            self.vmods.append({
+                    "realMods" : realMods,
+                    "virtMods" : virtMods})
+
+
 def xkm_read_sectioninfo(file):
     sect = XkmSectionInfo()
     sect.unpack(file)
@@ -393,6 +496,9 @@ def xkm_read_section(file, section):
         sect.unpack(file)
     elif section.type == XkmSectionTypes.index("XkmIndicatorsIndex"):
         sect = XkmIndicators()
+        sect.unpack(file)
+    elif section.type == XkmSectionTypes.index("XkmSymbolsIndex"):
+        sect = XkmSymbols()
         sect.unpack(file)
 
     print "%s" % sect
@@ -431,6 +537,7 @@ def xkm_read(file):
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         usage(1)
+
 
     filename = sys.argv[1]
     file = open(filename, "rb")
