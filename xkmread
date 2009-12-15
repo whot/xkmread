@@ -2,6 +2,7 @@
 
 import sys
 import struct
+import re
 
 XkbNumVirtualMods = 16
 XkbNumKbdGroups = 4
@@ -13,6 +14,32 @@ XkmSectionTypes = ["XkmTypesIndex",
                    "XkmKeyNamesIndex",
                    "XkmGeometryIndex",
                    "XkmVirtualModsIndex"]
+
+class Keysyms():
+    def __init__(self):
+        self.keys = {}
+        self.readfile("/usr/include/X11/keysymdef.h")
+        self.readfile("/usr/include/X11/keysym.h")
+        self.readfile("/usr/include/X11/XF86keysym.h")
+
+    def readfile(self, file):
+        file = open(file, "r")
+        pattern = "^#define\s+(\w+)\s+(\w+).*"
+
+        line = file.readline()
+        while (line):
+            vals = re.split(pattern, line)
+            if len(vals) > 1:
+                self.keys[int(vals[2], 16)] = vals[1]
+            line = file.readline()
+
+    def __getitem__(self, key):
+        if self.keys.has_key(key):
+            return self.keys[key]
+        else:
+            return str(key)
+
+keysyms = Keysyms()
 
 def usage(exitcode = 0):
     import os
