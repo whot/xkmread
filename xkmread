@@ -9,6 +9,12 @@ XkbNumKbdGroups = 4
 XkmKeyHasTypes = 0x0F
 XkmKeyHasActions = 1 << 4
 XkmKeyHasBehavior = 1 << 5
+XkbUnknownDoodad = 0
+XkbOutlineDoodad = 1
+XkbSolidDoodad = 2
+XkbTextDoodad = 3
+XkbIndicatorDoodad = 4
+XkbLogoDoodad = 5
 
 XkmSectionTypes = ["XkmTypesIndex",
                    "XkmCompatMapIndex",
@@ -466,6 +472,216 @@ class XkmSymbols(XkmSection):
                     "realMods" : realMods,
                     "virtMods" : virtMods})
 
+class XkmOutline(XkmSection):
+    def __init__(self):
+        XkmSection.__init__(self)
+        self.fields = [
+                "num_points",
+                "corner_radius",
+                "points",
+                ]
+        self.format = "BB"
+    def unpack(self, buffer):
+        XkmSection.unpack(self, buffer)
+        buffer.read(2) # pad
+
+        self.points = []
+        for i in range(0, self.num_points):
+            p = struct.unpack("hh", buffer.read(4))
+            self.points.append(p)
+
+
+class XkmShape(XkmSection):
+    def __init__(self):
+        XkmSection.__init__(self)
+        self.fields = [
+                "num_outlines",
+                "primary_ndx",
+                "approx_ndx",
+                "name", # acually the first
+                "outlines",
+                ]
+        self.format = "BBB"
+
+    def unpack(self, buffer):
+        self.name = xkm_read_string(buffer)
+        XkmSection.unpack(self, buffer)
+        buffer.read(1) # pad
+
+        self.outlines = []
+
+        for i in range(0, self.num_outlines):
+            outline = XkmOutline()
+            outline.unpack(buffer)
+            self.outlines.append(outline)
+
+
+class XkmKeyDesc(XkmSection):
+    def __init__(self):
+        XkmSection.__init__(self)
+        self.fields = [
+                "name",
+                "gap",
+                "shape_ndx",
+                "color_ndx"]
+        self.format = "4shBB"
+
+class XkmRowDesc(XkmSection):
+    def __init__(self):
+        XkmSection.__init__(self)
+        self.fields = [
+                "top",
+                "left",
+                "num_keys",
+                "vertical",
+                "keys",
+                ]
+        self.format = "hhBB"
+
+    def unpack(self, buffer):
+        XkmSection.unpack(self, buffer)
+        buffer.read(2) # pad
+
+        self.keys = []
+        for i in range(0, self.num_keys):
+            key = XkmKeyDesc()
+            key.unpack(buffer)
+            self.keys.append(key)
+
+class XkmGeomSection(XkmSection):
+    def __init__(self):
+        XkmSection.__init__(self)
+        self.fields = [
+                "top",
+                "left",
+                "width",
+                "height",
+                "angle",
+                "priority",
+                "num_rows",
+                "num_doodads",
+                "num_overlays",
+                "name", # actually the first
+                "rows"
+                ]
+        self.format = "hhHHhBBBB"
+
+    def unpack(self, buffer):
+        self.name = xkm_read_string(buffer)
+        XkmSection.unpack(self, buffer)
+        buffer.read(2) # pad
+
+        self.rows = []
+        for i in range(0, self.num_rows):
+            row = XkmRowDesc()
+            row.unpack(buffer)
+            self.rows.append(row)
+
+class XkmDoodad(XkmSection):
+    def __init__(self):
+        XkmSection.__init__(self)
+        self.fields = [
+                "type",
+                "priority",
+                "top",
+                "left",
+                "name", # actually the first
+                ]
+        self.format = "BBhh"
+
+    def unpack(self, buffer):
+        self.name = xkm_read_string(buffer)
+        XkmSection.unpack(self, buffer)
+
+        if self.type == XkbOutlineDoodad or self.type == XkbSolidDoodad:
+            self.fields += [    "angle",
+                                "color_ndx",
+                                "shape_ndx"]
+            self.angle, self.color_ndx, self.shape_ndx, pad1, pad2 = struct.unpack("hBBHI", buffer.read(10))
+        elif self.type == XkbTextDoodad:
+            self.fields += [    "angle",
+                                "width",
+                                "height",
+                                "color_ndx" ]
+            self.angle, self.width, self.height, self.color_ndx, pad1, pad2 = struct.unpack("hHHBBH", buffer.read(12))
+            self.fields += ["text", "font"]
+            self.text = xkm_read_string(buffer)
+            self.font = xkm_read_string(buffer)
+        elif self.type == XkbIndicatorDoodad:
+            self.fields += [    "shape_ndx",
+                                "on_color_ndx",
+                                "off_color_ndx"]
+            self.shape_ndx, self.on_color_ndx, self.off_color_ndx, pad1, pad2, pad3 = struct.unpack("BBBBHI", buffer.read(12))
+
+        elif self.type == XkbLogoDoodad:
+            self.fields += [    "angle",
+                                "color_ndx",
+                                "shape_ndx"]
+            self.angle, self.color_ndx, self.shape_ndx, pad1, pad2 = struct.unpack("hBBBI", buffer.read(12))
+            self.fields += ["logo_name"]
+            self.logo_name = xkm_read_string(buffer)
+
+        print self.type
+
+class XkmGeometry(XkmSection):
+    def __init__(self):
+        XkmSection.__init__(self)
+        self.fields = [
+                "width_mm",
+                "height_mm",
+                "base_color_ndx",
+                "label_color_ndx",
+                "num_properties",
+                "num_colors",
+                "num_shapes",
+                "num_sections",
+                "num_doodads",
+                "num_key_aliases",
+                "name", # actually the first
+                "label_font",
+                "geom_properties",
+                "colors",
+                "shapes",
+                "sections",
+                "doodads"
+                ]
+        self.format = "HHBBHHHHHH"
+
+    def unpack(self, buffer):
+        self.name = xkm_read_string(buffer)
+        XkmSection.unpack(self, buffer)
+        buffer.read(2) #pad
+        self.label_font = xkm_read_string(buffer)
+
+        self.geom_properties = []
+        self.colors = []
+        self.shapes = []
+        self.sections = []
+        self.doodads = []
+
+        for i in range(0, self.num_properties):
+            key = xkm_read_string(buffer)
+            val = xkm_read_string(buffer)
+            self.geom_properties.append({key : val})
+
+        for i in range(0, self.num_colors):
+            self.colors.append(xkm_read_string(buffer))
+
+        for i in range(0, self.num_shapes):
+            shape = XkmShape()
+            shape.unpack(buffer)
+            self.shapes.append(shape)
+
+        for i in range(self.num_sections):
+            sect = XkmGeomSection()
+            sect.unpack(buffer)
+            self.sections.append(sect)
+
+        for i in range(self.num_doodads):
+            doodad = XkmDoodad()
+            doodad.unpack(buffer)
+            self.doodads.append(doodad)
+
 
 def xkm_read_sectioninfo(file):
     sect = XkmSectionInfo()
@@ -499,6 +715,9 @@ def xkm_read_section(file, section):
         sect.unpack(file)
     elif section.type == XkmSectionTypes.index("XkmSymbolsIndex"):
         sect = XkmSymbols()
+        sect.unpack(file)
+    elif section.type == XkmSectionTypes.index("XkmGeometryIndex"):
+        sect = XkmGeometry()
         sect.unpack(file)
 
     print "%s" % sect
